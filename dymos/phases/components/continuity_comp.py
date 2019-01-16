@@ -27,6 +27,8 @@ class ContinuityCompBase(ExplicitComponent):
         self.options.declare('time_units', default=None, allow_none=True, types=string_types,
                              desc='Units of the integration variable')
 
+        self.options.declare('linear_state_continuity', default=True, types=bool)
+
     def _setup_state_continuity(self):
         state_options = self.options['state_options']
         num_segend_nodes = self.options['grid_data'].subset_num_nodes['segment_ends']
@@ -83,7 +85,8 @@ class ContinuityCompBase(ExplicitComponent):
 
             if options['continuity'] and not self.options['grid_data'].compressed:
                 self.add_constraint(name='defect_states:{0}'.format(state_name),
-                                    equals=0.0, scaler=1.0, linear=True)
+                                    equals=0.0, scaler=1.0,
+                                    linear=self.options['linear_state_continuity'])
 
     def _setup_control_continuity(self):
         control_options = self.options['control_options']
