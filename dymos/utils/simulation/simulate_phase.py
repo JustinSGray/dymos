@@ -178,6 +178,7 @@ def simulate_phase(phase_name, ode_class, time_options, state_options, control_o
                                         seg_out.outputs[var_type][var]['value']),
                                        axis=0)
         first_seg = False
+
     # Save
     if record:
         filepath = record_file if record_file else '{0}_sim.db'.format(phase_name)

@@ -84,6 +84,8 @@ class PhaseSimulationResults(object):
         p = Problem(model=Group())
         time = self.get_values('time')
         time_phase = self.get_values('time_phase')
+        t_initial = self.get_values('t_initial')
+        t_duration = self.get_values('t_duration')
         nn = len(time)
         ode_sys = ode_class(num_nodes=nn, **init_kwargs)
         ivc = p.model.add_subsystem('inputs', subsys=IndepVarComp(), promotes_outputs=['*'])
@@ -92,9 +94,15 @@ class PhaseSimulationResults(object):
         # Connect times
         ivc.add_output('time', val=np.zeros((nn, 1)), units=self.time_options['units'])
         ivc.add_output('time_phase', val=np.zeros((nn, 1)), units=self.time_options['units'])
+        ivc.add_output('t_initial', val=np.zeros((nn, 1)), units=self.time_options['units'])
+        ivc.add_output('t_duration', val=np.zeros((nn, 1)), units=self.time_options['units'])
         p.model.connect('time', ['ode.{0}'.format(t) for t in self.time_options['targets']])
         p.model.connect('time_phase', ['ode.{0}'.format(t) for t in
                                        self.time_options['time_phase_targets']])
+        p.model.connect('t_initial', ['ode.{0}'.format(t) for t in
+                                       self.time_options['t_initial_targets']])
+        p.model.connect('t_duration', ['ode.{0}'.format(t) for t in
+                                       self.time_options['t_duration_targets']])
 
         # Connect states
         for name, options in iteritems(self.state_options):
@@ -179,6 +187,8 @@ class PhaseSimulationResults(object):
         # Assign times
         p['time'] = time
         p['time_phase'] = time_phase
+        p['t_initial'] = t_initial
+        p['t_duration'] = t_duration
 
         # Assign states
         for name in self.state_options:
