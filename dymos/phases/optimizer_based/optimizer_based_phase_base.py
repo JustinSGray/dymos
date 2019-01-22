@@ -8,7 +8,7 @@ import numpy as np
 
 from openmdao.api import IndepVarComp
 
-from ..optimizer_based.components import CollocationComp, StateInterpComp
+from ..optimizer_based.components import CollocationComp, StateInterpComp, DefectBalanceComp
 from ..components import EndpointConditionsComp
 from ..phase_base import PhaseBase
 from ...utils.constants import INF_BOUND
@@ -115,6 +115,11 @@ class OptimizerBasedPhaseBase(PhaseBase):
 
         return exp_out
 
+    def initialize(self, **kwargs):
+        super(OptimizerBasedPhaseBase, self).initialize(**kwargs)
+
+        self.options.declare('defect_solver', default=False, types=bool)
+
     def setup(self):
         super(OptimizerBasedPhaseBase, self).setup()
 
@@ -187,11 +192,14 @@ class OptimizerBasedPhaseBase(PhaseBase):
         grid_data = self.grid_data
         num_state_input_nodes = grid_data.subset_num_nodes['state_input']
 
-        indep = IndepVarComp()
-        for name, options in iteritems(self.state_options):
-            indep.add_output(name='states:{0}'.format(name),
-                             shape=(num_state_input_nodes, np.prod(options['shape'])),
-                             units=options['units'])
+        if self.options['defect_solver']:
+
+        else:
+            indep = IndepVarComp()
+            for name, options in iteritems(self.state_options):
+                indep.add_output(name='states:{0}'.format(name),
+                                 shape=(num_state_input_nodes, np.prod(options['shape'])),
+                                 units=options['units'])
         self.add_subsystem('indep_states', indep, promotes_outputs=['*'])
 
         for name, options in iteritems(self.state_options):
