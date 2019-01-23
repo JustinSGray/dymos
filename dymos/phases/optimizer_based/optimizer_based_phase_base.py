@@ -135,16 +135,19 @@ class OptimizerBasedPhaseBase(PhaseBase):
         input_params = ['input_params'] if self.input_parameter_options else []
         control_interp_comp = ['control_interp_comp'] if num_controls > 0 else []
 
-        order = self._time_extents + indep_controls + \
-            input_params + design_params + \
-            ['time',] + control_interp_comp + \
-            ['indep_jumps', 'initial_conditions', 'final_conditions']
+
+        order = self._time_extents + indep_controls + input_params + design_params
+            
+        if self.options['defect_solver']: 
+            order += ['time',] 
+        else: 
+            order += ['indep_states', 'time'] 
+        
+        order += control_interp_comp + ['indep_jumps', 'initial_conditions', 'final_conditions']
 
         # only need this if we aren't using a solver to converge defects
         # otherwise, the states are owned by `collocation_constraint` which is a balance comp
-        if not self.options['defect_solver']: 
-            order.append('indep_states')
-
+       
         if transcription == 'gauss-lobatto':
             order = order + ['rhs_disc', 'state_interp', 'rhs_col', 'collocation_constraint']
         elif transcription == 'radau-ps':

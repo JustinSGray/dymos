@@ -13,27 +13,27 @@ class BallisticRocketGuidanceComp(ExplicitComponent):
         nn = self.options['num_nodes']
 
         self.add_input('time_phase',
-                       val=np.zeros(nn),
+                       val=np.arange(nn),
                        desc='current elapsed time of the current phase',
                        units='s')
 
         self.add_input('t_duration',
-                       val=np.zeros(nn),
+                       val=np.ones(nn),
                        desc='total duration of the current phase',
                        units='s')
 
         self.add_input('theta_0',
-                       val=np.zeros(nn),
+                       val=np.ones(nn),
                        desc='thrust pitch angle at the start of pitchover',
                        units='rad')
 
         self.add_input('theta_f',
-                       val=np.zeros(nn),
+                       val=2*np.ones(nn),
                        desc='thrust pitch angle at the end of pitchover',
                        units='rad')
 
         self.add_output('theta',
-                        val=np.zeros(nn),
+                        val=np.ones(nn),
                         desc='pitch angle',
                         units='rad')
 
@@ -60,5 +60,17 @@ class BallisticRocketGuidanceComp(ExplicitComponent):
 
         partials['theta', 'time_phase'] = -(theta_f - theta_0) / t_duration
         partials['theta', 't_duration'] = time_phase * (theta_f - theta_0) / t_duration**2
-        partials['theta', 'theta_0'] = 1.0 + 1.0 / (time_phase / t_duration)
+        partials['theta', 'theta_0'] = 1.0 + (time_phase / t_duration)
         partials['theta', 'theta_f'] = -(time_phase / t_duration)
+
+
+if __name__ == "__main__": 
+
+    from openmdao.api import Problem
+
+    p = Problem()
+    p.model = BallisticRocketGuidanceComp(num_nodes=3)
+
+    p.setup()
+    p.check_partials()
+
