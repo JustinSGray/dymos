@@ -142,7 +142,6 @@ def ballistic_rocket_max_range(transcription='gauss-lobatto', num_segments=8, tr
 
     exp_out = traj.simulate()
 
-    exit(0)
 
     #
     # t_imp = boost_phase.get_values('time')
@@ -185,39 +184,42 @@ def ballistic_rocket_max_range(transcription='gauss-lobatto', num_segments=8, tr
     if SHOW_PLOTS:
         # exp_out = boost_phase.simulate(times=50, record_file=sim_record)
 
-        fig, ax = plt.subplots()
-        fig.suptitle('Brachistochrone Solution')
+        fig, axes = plt.subplots(ncols=2)
+        fig.suptitle('Ballistic Rocket Solution')
 
+        boost_phase = p.model.traj.phases.boost
         x_imp = boost_phase.get_values('x', nodes='all')
         y_imp = boost_phase.get_values('y', nodes='all')
+        t_imp = boost_phase.get_values('time', nodes='all')
+        
+        # vals = boost_phase.get_values('mprop', nodes='all')
+        # print(vals[-1])
+        # vals = boost_phase.get_values('vx', nodes='all')
+        # print(vals[-1])
+        # vals = boost_phase.get_values('vy', nodes='all')
+        # print(vals[-1])
 
-        x_exp = exp_out.get_values('x')
-        y_exp = exp_out.get_values('y')
+        x_exp = exp_out.get_values('x', phases='boost', flat=True)
+        y_exp = exp_out.get_values('y', phases='boost', flat=True)
+        t_exp = exp_out.get_values('time', phases='boost', flat=True)
 
-        ax.plot(x_imp, y_imp, 'ro', label='implicit')
-        ax.plot(x_exp, y_exp, 'b-', label='explicit')
+        ax = axes[0]
+        ax.plot(t_imp, y_imp, 'ro', label='i: boost')
+        ax.plot(t_exp, y_exp, 'b-', label='sim: boost')
 
-        ax.set_xlabel('x (m)')
+        ax.set_xlabel('time (s)')
         ax.set_ylabel('y (m)')
         ax.grid(True)
         ax.legend(loc='upper right')
 
-        fig, ax = plt.subplots()
-        fig.suptitle('Brachistochrone Solution')
+        ax = axes[1]
+        ax.plot(x_imp, y_imp, 'ro', label='i: boost')
+        ax.plot(x_exp, y_exp, 'b-', label='sim: boost')
 
-        x_imp = boost_phase.get_values('time_phase', nodes='all')
-        y_imp = boost_phase.get_values('theta_rate2', nodes='all')
-
-        x_exp = exp_out.get_values('time_phase')
-        y_exp = exp_out.get_values('theta_rate2')
-
-        ax.plot(x_imp, y_imp, 'ro', label='implicit')
-        ax.plot(x_exp, y_exp, 'b-', label='explicit')
-
-        ax.set_xlabel('time (s)')
-        ax.set_ylabel('theta rate2 (rad/s**2)')
+        ax.set_xlabel('x (m)')
+        ax.set_ylabel('y (m)')
+        ax.set_xlim(-1,1)
         ax.grid(True)
-        ax.legend(loc='lower right')
 
         plt.show()
 

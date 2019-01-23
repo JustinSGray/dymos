@@ -8,7 +8,7 @@ import numpy as np
 
 from openmdao.api import IndepVarComp
 
-from ..optimizer_based.components import CollocationComp, StateInterpComp, DefectBalanceComp
+from ..optimizer_based.components import CollocationDefectComp, StateInterpComp, CollocationBalanceComp
 from ..components import EndpointConditionsComp
 from ..phase_base import PhaseBase
 from ...utils.constants import INF_BOUND
@@ -137,8 +137,13 @@ class OptimizerBasedPhaseBase(PhaseBase):
 
         order = self._time_extents + indep_controls + \
             input_params + design_params + \
-            ['indep_states', 'time'] + control_interp_comp + \
+            ['time',] + control_interp_comp + \
             ['indep_jumps', 'initial_conditions', 'final_conditions']
+
+        # only need this if we aren't using a solver to converge defects
+        # otherwise, the states are owned by `collocation_constraint` which is a balance comp
+        if not self.options['defect_solver']: 
+            order.append('indep_states')
 
         if transcription == 'gauss-lobatto':
             order = order + ['rhs_disc', 'state_interp', 'rhs_col', 'collocation_constraint']
@@ -192,14 +197,12 @@ class OptimizerBasedPhaseBase(PhaseBase):
         grid_data = self.grid_data
         num_state_input_nodes = grid_data.subset_num_nodes['state_input']
 
-        if self.options['defect_solver']:
 
-        else:
-            indep = IndepVarComp()
-            for name, options in iteritems(self.state_options):
-                indep.add_output(name='states:{0}'.format(name),
-                                 shape=(num_state_input_nodes, np.prod(options['shape'])),
-                                 units=options['units'])
+        indep = IndepVarComp()
+        for name, options in iteritems(self.state_options):
+            indep.add_output(name='states:{0}'.format(name),
+                                shape=(num_state_input_nodes, np.prod(options['shape'])),
+                                units=options['units'])
         self.add_subsystem('indep_states', indep, promotes_outputs=['*'])
 
         for name, options in iteritems(self.state_options):
@@ -266,10 +269,16 @@ class OptimizerBasedPhaseBase(PhaseBase):
 
         time_units = self.time_options['units']
 
-        self.add_subsystem('collocation_constraint',
-                           CollocationComp(grid_data=grid_data,
-                                           state_options=self.state_options,
-                                           time_units=time_units))
+        if self.options['defect_solver']:
+            self.add_subsystem('collocation_constraint', 
+                               CollocationBalanceComp(grid_data=grid_data,
+                                                      state_options=self.state_options,
+                                                      time_units=time_units))
+        else: 
+            self.add_subsystem('collocation_constraint',
+                               CollocationDefectComp(grid_data=grid_data,
+                                                     state_options=self.state_options,
+                                                     time_units=time_units))
 
         self.connect('time.dt_dstau', ('collocation_constraint.dt_dstau'),
                      src_indices=grid_data.subset_node_indices['col'])

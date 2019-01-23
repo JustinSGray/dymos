@@ -19,8 +19,7 @@ def gauss_lobatto_subsets_and_nodes(n, seg_idx, compressed=False, *args, **kwarg
     Parameters
     ----------
     n : int
-        The total number of nodes in the Gauss-Lobatto segment.  Must be
-        an odd number.
+        Transcription order of the segment. Must be an odd number. 
     seg_idx : int
         The index of this segment within its phase.
     compressed : bool

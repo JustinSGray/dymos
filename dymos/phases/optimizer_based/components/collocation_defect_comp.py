@@ -6,7 +6,7 @@ from dymos.phases.grid_data import GridData
 from dymos.utils.misc import get_rate_units
 
 
-class CollocationComp(ExplicitComponent):
+class CollocationDefectComp(ExplicitComponent):
 
     """
     CollocationComp computes the generalized defect of a segment for implicit collocation.
@@ -118,6 +118,8 @@ class CollocationComp(ExplicitComponent):
             f_computed = inputs[var_names['f_computed']]
 
             outputs[var_names['defect']] = ((f_approx - f_computed).T * dt_dstau).T
+
+            tmp = ((f_approx - f_computed).T * dt_dstau).T
 
     def compute_partials(self, inputs, partials):
         dt_dstau = inputs['dt_dstau']

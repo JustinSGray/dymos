@@ -12,7 +12,7 @@ from openmdao.core.implicitcomponent import ImplicitComponent
 from dymos.phases.grid_data import GridData
 from dymos.utils.misc import get_rate_units
 
-class DefectBalanceComp(ImplicitComponent):
+class CollocationBalanceComp(ImplicitComponent):
     """
     A simple equation balance for solving implicit equations.
 
@@ -37,14 +37,24 @@ class DefectBalanceComp(ImplicitComponent):
             'time_units', default=None, allow_none=True, types=string_types,
             desc='Units of time')
 
+        self.options.declare(
+            'reverse_time', types=bool, default=False, 
+            desc='It True, the ODE integration happens backwards; from t_final to t_initial')
+
 
     def setup(self):
         """
         Define the independent variables, output variables, and partials.
         """
         state_options = self.options['state_options']
+        grid_data = self.options['grid_data']
+        num_col_nodes = self.options['grid_data'].subset_num_nodes['col']
+        time_units = self.options['time_units']
 
-        self.add_input('dt_dstau', units=time_units, shape=(num_col_nodes,))
+        num_state_input_nodes = grid_data.subset_num_nodes['state_input']
+
+        self.add_input('dt_dstau', units=time_units, 
+                       shape=(num_col_nodes,))
 
         self.var_names = var_names = {}
         for state_name in state_options:
@@ -54,23 +64,26 @@ class DefectBalanceComp(ImplicitComponent):
                 # 'defect': 'defects:{0}'.format(state_name),
             }
 
-        for name, options in iteritems(state_options):
+        for state_name, options in iteritems(state_options):
 
+            shape = options['shape']
+            units = options['units']
 
-            self.add_output(name=name,
+            rate_units = get_rate_units(units, time_units)
+
+            self.add_output(name=state_name,
                             shape=(num_state_input_nodes, np.prod(options['shape'])),
-                            units=options['units'])
-
+                            units=units)
 
             self.add_input(
-                name=var_names['f_approx'],
+                name=var_names[state_name]['f_approx'],
                 shape=(num_col_nodes,) + shape,
                 desc='Estimated derivative of state {0} '
                      'at the collocation nodes'.format(state_name),
                 units=rate_units)
 
             self.add_input(
-                name=var_names['f_computed'],
+                name=var_names[state_name]['f_computed'],
                 shape=(num_col_nodes,) + shape,
                 desc='Computed derivative of state {0} '
                      'at the collocation nodes'.format(state_name),
@@ -84,7 +97,7 @@ class DefectBalanceComp(ImplicitComponent):
         num_col_nodes = self.options['grid_data'].subset_num_nodes['col']
         state_options = self.options['state_options']
 
-        for state_name, options in state_options.items():
+        for state_name, options in iteritems(state_options):
             shape = options['shape']
             size = np.prod(shape)
 
@@ -92,16 +105,16 @@ class DefectBalanceComp(ImplicitComponent):
 
             var_names = self.var_names[state_name]
 
-            self.declare_partials(of=var_names['defect'],
+            self.declare_partials(of=state_name,
                                   wrt=var_names['f_approx'],
                                   rows=r, cols=r)
 
-            self.declare_partials(of=var_names['defect'],
+            self.declare_partials(of=state_name,
                                   wrt=var_names['f_computed'],
                                   rows=r, cols=r)
 
             c = np.repeat(np.arange(num_col_nodes), size)
-            self.declare_partials(of=var_names['defect'],
+            self.declare_partials(of=state_name,
                                   wrt='dt_dstau',
                                   rows=r, cols=c)
 
@@ -120,14 +133,31 @@ class DefectBalanceComp(ImplicitComponent):
         """
         state_options = self.options['state_options']
         dt_dstau = inputs['dt_dstau']
+        
+        
+       
 
         for state_name in state_options:
+            print(state_name)
+            if self.options['reverse_time']: # the end point acts like an indep var in reverse time
+                residuals[state_name][-1] = 0
+            else: # the start point acts like an indep var in forward time
+                residuals[state_name][0] = 0
+
             var_names = self.var_names[state_name]
 
             f_approx = inputs[var_names['f_approx']]
             f_computed = inputs[var_names['f_computed']]
 
-            residuals[state_name] = ((f_approx - f_computed).T * dt_dstau).T
+
+            tmp = ((f_approx - f_computed).T * dt_dstau).T
+            print('foo', tmp.shape)
+            print('bar', residuals[state_name].shape)
+
+            if self.options['reverse_time']:
+                residuals[state_name][:-1] = ((f_approx - f_computed).T * dt_dstau).T
+            else:
+                residuals[state_name][1:] = ((f_approx - f_computed).T * dt_dstau).T
 
     def linearize(self, inputs, outputs, jacobian):
         dt_dstau = inputs['dt_dstau']

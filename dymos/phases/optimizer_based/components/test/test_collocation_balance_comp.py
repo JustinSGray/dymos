@@ -8,7 +8,7 @@ from numpy.testing import assert_almost_equal
 from openmdao.api import Problem, Group, IndepVarComp
 from openmdao.utils.assert_utils import assert_check_partials
 
-from dymos.phases.optimizer_based.components import CollocationComp
+from dymos.phases.optimizer_based.components.collocation_balance_comp import CollocationBalanceComp
 from dymos.phases.grid_data import GridData
 
 
@@ -49,8 +49,8 @@ class TestCollocationComp(unittest.TestCase):
             val=np.zeros((gd.subset_num_nodes['col'], 3, 2)), units='m/s')
 
         self.p.model.add_subsystem('defect_comp',
-                                   subsys=CollocationComp(grid_data=gd,
-                                                          state_options=state_options))
+                                   subsys=CollocationBalanceComp(grid_data=gd,
+                                                                 state_options=state_options))
 
         self.p.model.connect('f_approx:x', 'defect_comp.f_approx:x')
         self.p.model.connect('f_approx:v', 'defect_comp.f_approx:v')
@@ -69,16 +69,20 @@ class TestCollocationComp(unittest.TestCase):
         self.p['f_computed:v'] = np.random.random((gd.subset_num_nodes['col'], 3, 2))
 
         self.p.run_model()
+        self.p.model.run_apply_nonlinear() # need to make sure residuals are computed
 
     def test_results(self):
         dt_dstau = self.p['dt_dstau']
 
-        assert_almost_equal(self.p['defect_comp.defects:x'],
-                            dt_dstau[:, np.newaxis] * (self.p['f_approx:x']-self.p['f_computed:x']))
+        assert_almost_equal(self.p.model._residuals._views['defect_comp.x'],
+                            dt_dstau[:, np.newaxis] * 
+                            (self.p['f_approx:x']-self.p['f_computed:x']))
 
-        assert_almost_equal(self.p['defect_comp.defects:v'],
+        assert_almost_equal(self.p.model._residuals._views['defect_comp.v'],
                             dt_dstau[:, np.newaxis, np.newaxis] *
                             (self.p['f_approx:v']-self.p['f_computed:v']))
+
+       
 
     def test_partials(self):
         np.set_printoptions(linewidth=1024)
