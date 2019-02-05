@@ -113,6 +113,54 @@ class TestCollocationBalanceIndex(unittest.TestCase):
         self.assertSetEqual(set(defect_comp.state_idx_map['v']['solver']), set([0,1,2,3,4,5,7,8,9,10]))
         self.assertSetEqual(set(defect_comp.state_idx_map['v']['indep']), set([6, 11]))
 
+    def test_5_lgr_compressed(self): 
+
+        transcription = 'radau-ps'
+        p = Problem(model=Group())
+
+        gd = GridData(num_segments=2, segment_ends=np.array([0., 2., 4.]),
+                      transcription=transcription, transcription_order=5, compressed=True)
+
+        state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
+                         'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':False, 'fix_final':True}}
+
+        defect_comp = p.model.add_subsystem('defect_comp',
+                                            subsys=CollocationBalanceComp(grid_data=gd,
+                                                                          state_options=state_options))
+
+        p.setup()
+        p.final_setup()
+
+        self.assertSetEqual(set(defect_comp.state_idx_map['x']['solver']), set([1,2,3,4,5,6,7,8,9,10]))
+        self.assertSetEqual(set(defect_comp.state_idx_map['x']['indep']), set([0,]))
+
+        self.assertSetEqual(set(defect_comp.state_idx_map['v']['solver']), set([0,1,2,3,4,5,6,7,8,9]))
+        self.assertSetEqual(set(defect_comp.state_idx_map['v']['indep']), set([10,]))
+
+
+    def test_5_lgl_compressed(self): 
+
+        transcription = 'gauss-lobatto'
+        p = Problem(model=Group())
+
+        gd = GridData(num_segments=2, segment_ends=np.array([0., 2., 4.]),
+                      transcription=transcription, transcription_order=5, compressed=True)
+
+        state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
+                         'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':False, 'fix_final':True}}
+
+        defect_comp = p.model.add_subsystem('defect_comp',
+                                            subsys=CollocationBalanceComp(grid_data=gd,
+                                                                          state_options=state_options))
+
+        p.setup()
+        p.final_setup()
+
+        self.assertSetEqual(set(defect_comp.state_idx_map['x']['solver']), set([1,2,3,4]))
+        self.assertSetEqual(set(defect_comp.state_idx_map['x']['indep']), set([0,]))
+
+        self.assertSetEqual(set(defect_comp.state_idx_map['v']['solver']), set([0,1,2,3]))
+        self.assertSetEqual(set(defect_comp.state_idx_map['v']['indep']), set([4,]))
 
 class TestCollocationComp(unittest.TestCase):
 
