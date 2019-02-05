@@ -11,6 +11,7 @@ from openmdao.core.implicitcomponent import ImplicitComponent
 
 from dymos.phases.grid_data import GridData
 from dymos.utils.misc import get_rate_units
+from dymos.utils.indexing import get_src_indices_by_row
 
 class CollocationBalanceComp(ImplicitComponent):
     """
@@ -37,9 +38,9 @@ class CollocationBalanceComp(ImplicitComponent):
             'time_units', default=None, allow_none=True, types=string_types,
             desc='Units of time')
 
-        self.options.declare(
-            'reverse_time', types=bool, default=False, 
-            desc='It True, the ODE integration happens backwards; from t_final to t_initial')
+        # self.options.declare(
+        #     'reverse_time', types=bool, default=False, 
+        #     desc='It True, the ODE integration happens backwards; from t_final to t_initial')
 
 
     def setup(self):
@@ -48,10 +49,40 @@ class CollocationBalanceComp(ImplicitComponent):
         """
         state_options = self.options['state_options']
         grid_data = self.options['grid_data']
-        num_col_nodes = self.options['grid_data'].subset_num_nodes['col']
+        num_col_nodes = grid_data.subset_num_nodes['col']
         time_units = self.options['time_units']
 
         num_state_input_nodes = grid_data.subset_num_nodes['state_input']
+
+        seg_ends = grid_data.subset_node_indices['segment_ends']
+        state_input = grid_data.subset_node_indices['state_input']
+
+        # indecies into all_nodes that correspond to the solved and indep vars (not accouting for fix_initial or fix_final)
+        solver_solved = grid_data.subset_node_indices['solver_solved']
+        solver_indep = grid_data.subset_node_indices['solver_indep']
+
+        # numpy magic to find the locations in state_input that match the index-values specified in solver_solved
+        self.solver_node_idx = list(np.where(np.in1d(state_input, solver_solved))[0])
+        self.indep_node_idx = list(np.where(np.in1d(state_input, solver_indep))[0])
+
+        self.state_idx_map = {} # keyed by state_name, contains solver and optimizer index lists        
+   
+        for state_name, options in iteritems(state_options):
+            self.state_idx_map[state_name] = {'solver':None, 'indep':None}
+            if options['fix_initial'] and options['fix_final']: 
+                raise ValueError('Can not use solver based collocation defects with both "fix_initial" and "fix_final" turned on.')
+
+            if (not options['fix_initial']) and (not options['fix_final']): 
+                raise ValueError('Must have either fix_initial" and "fix_final" turned on with solver base collocation')
+
+            elif options['fix_initial']: 
+                self.state_idx_map[state_name]['solver'] = self.solver_node_idx[1:]
+                self.state_idx_map[state_name]['indep'] = [self.solver_node_idx[0]] + self.indep_node_idx
+
+            elif options['fix_final']: 
+                self.state_idx_map[state_name]['solver'] = self.solver_node_idx[:-1]
+                self.state_idx_map[state_name]['indep'] = self.indep_node_idx + [self.solver_node_idx[-1]]
+
 
         self.add_input('dt_dstau', units=time_units, 
                        shape=(num_col_nodes,))
@@ -72,7 +103,7 @@ class CollocationBalanceComp(ImplicitComponent):
             rate_units = get_rate_units(units, time_units)
 
             self.add_output(name=state_name,
-                            shape=(num_state_input_nodes, np.prod(options['shape'])),
+                            shape=(num_state_input_nodes,) + shape,
                             units=units)
 
             self.add_input(
@@ -133,31 +164,22 @@ class CollocationBalanceComp(ImplicitComponent):
         """
         state_options = self.options['state_options']
         dt_dstau = inputs['dt_dstau']
-        
-        
-       
-
+    
         for state_name in state_options:
             print(state_name)
-            if self.options['reverse_time']: # the end point acts like an indep var in reverse time
-                residuals[state_name][-1] = 0
-            else: # the start point acts like an indep var in forward time
-                residuals[state_name][0] = 0
-
+            
             var_names = self.var_names[state_name]
 
             f_approx = inputs[var_names['f_approx']]
             f_computed = inputs[var_names['f_computed']]
 
+            # IndepVarComp residuals are always 0 
 
-            tmp = ((f_approx - f_computed).T * dt_dstau).T
-            print('foo', tmp.shape)
-            print('bar', residuals[state_name].shape)
+            solved_idx = self.state_idx_map[state_name]['solver']
+            indep_idx = self.state_idx_map[state_name]['solver']
 
-            if self.options['reverse_time']:
-                residuals[state_name][:-1] = ((f_approx - f_computed).T * dt_dstau).T
-            else:
-                residuals[state_name][1:] = ((f_approx - f_computed).T * dt_dstau).T
+            residuals[state_name][solve_idx,...] = ((f_approx - f_computed).T * dt_dstau).T
+            residuals[state_name][indep_idx,...] = 0
 
     def linearize(self, inputs, outputs, jacobian):
         dt_dstau = inputs['dt_dstau']

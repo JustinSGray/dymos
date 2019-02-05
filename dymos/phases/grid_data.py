@@ -19,7 +19,8 @@ def gauss_lobatto_subsets_and_nodes(n, seg_idx, compressed=False, *args, **kwarg
     Parameters
     ----------
     n : int
-        Transcription order of the segment. Must be an odd number. 
+        The total number of nodes in the Gauss-Lobatto segment.  Must be
+        an odd number.
     seg_idx : int
         The index of this segment within its phase.
     compressed : bool
@@ -59,6 +60,12 @@ def gauss_lobatto_subsets_and_nodes(n, seg_idx, compressed=False, *args, **kwarg
         'solution': np.arange(n, dtype=int),
     }
 
+    subsets['solver_solved'] = subsets['state_input'] if compressed or seg_idx == 0 else subsets['state_input'][1::]
+    idxs_not_in_solved = np.where(np.in1d(subsets['state_input'],
+                                          subsets['solver_solved'],
+                                          invert=True))[0]
+    subsets['solver_indep'] = subsets['state_input'][idxs_not_in_solved]
+
     return subsets, lgl(n)[0]
 
 
@@ -94,7 +101,7 @@ def radau_pseudospectral_subsets_and_nodes(n, seg_idx, compressed=False, *args, 
     `first_seg == True`.  For Radau-Pseudospectral transcription, subset 'control_input' is always
     the same as subset 'control_disc'.
     """
-    node_indices = {
+    subsets = {
         'disc': np.arange(n + 1, dtype=int),
         'state_disc': np.arange(n + 1, dtype=int),
         'state_input': np.arange(n + 1, dtype=int) if not compressed or seg_idx == 0
@@ -106,7 +113,14 @@ def radau_pseudospectral_subsets_and_nodes(n, seg_idx, compressed=False, *args, 
         'all': np.arange(n + 1, dtype=int),
         'solution': np.arange(n + 1, dtype=int),
     }
-    return node_indices, lgr(n, include_endpoint=True)[0]
+
+    subsets['solver_solved'] = subsets['state_input'] if compressed or seg_idx == 0 else subsets['state_input'][1::]
+    idxs_not_in_solved = np.where(np.in1d(subsets['state_input'],
+                                          subsets['solver_solved'],
+                                          invert=True))[0]
+    subsets['solver_indep'] = subsets['state_input'][idxs_not_in_solved]
+
+    return subsets, lgr(n, include_endpoint=True)[0]
 
 
 def explicit_subsets_and_nodes(n, seg_idx, compressed=False, shooting='single'):
