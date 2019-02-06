@@ -65,6 +65,9 @@ class CollocationBalanceComp(ImplicitComponent):
         self.solver_node_idx = list(np.where(np.in1d(state_input, solver_solved))[0])
         self.indep_node_idx = list(np.where(np.in1d(state_input, solver_indep))[0])
 
+        # NOTE: num_col_nodes MUST equal len(self.solver_node_idx) - 1 in order to ensure you get a well defined problem
+        #       if that doesn't happen, something is wrong
+
         self.state_idx_map = {} # keyed by state_name, contains solver and optimizer index lists        
    
         for state_name, options in iteritems(state_options):
@@ -125,8 +128,6 @@ class CollocationBalanceComp(ImplicitComponent):
             # self.declare_partials(of=name, wrt=options['rhs_name'], rows=ar, cols=ar, val=1.0)
 
         # Setup partials
-        num_col_nodes = self.options['grid_data'].subset_num_nodes['col']
-        state_options = self.options['state_options']
 
         for state_name, options in iteritems(state_options):
             shape = options['shape']

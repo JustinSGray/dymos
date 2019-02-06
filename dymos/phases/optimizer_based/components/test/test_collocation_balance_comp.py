@@ -14,13 +14,12 @@ from dymos.phases.grid_data import GridData
 
 class TestCollocationBalanceIndex(unittest.TestCase): 
 
-    def test_3_lgl(self): 
+    def make_prob(self, transcription, n_segs, order, compressed): 
 
-        transcription = 'gauss-lobatto'
         p = Problem(model=Group())
 
-        gd = GridData(num_segments=3, segment_ends=np.array([0., 2., 4., 6, ]),
-                      transcription=transcription, transcription_order=3, compressed=False)
+        gd = GridData(num_segments=n_segs, segment_ends=np.arange(n_segs+1),
+                      transcription=transcription, transcription_order=order, compressed=compressed)
 
         state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
                          'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':False, 'fix_final':True}}
@@ -32,6 +31,13 @@ class TestCollocationBalanceIndex(unittest.TestCase):
         p.setup()
         p.final_setup()
 
+        return p
+
+
+    def test_3_lgl(self): 
+
+        p = self.make_prob(transcription='gauss-lobatto', n_segs=3, order=3, compressed=False)
+        defect_comp = p.model.defect_comp
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['solver']), set([1, 3, 5]))
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['indep']), set([0, 2, 4]))
 
@@ -41,21 +47,8 @@ class TestCollocationBalanceIndex(unittest.TestCase):
 
     def test_5_lgl(self): 
 
-        transcription = 'gauss-lobatto'
-        p = Problem(model=Group())
-
-        gd = GridData(num_segments=2, segment_ends=np.array([0., 2., 4. ]),
-                      transcription=transcription, transcription_order=5, compressed=False)
-
-        state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
-                         'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':False, 'fix_final':True}}
-
-        defect_comp = p.model.add_subsystem('defect_comp',
-                                            subsys=CollocationBalanceComp(grid_data=gd,
-                                                                          state_options=state_options))
-
-        p.setup()
-        p.final_setup()
+        p = self.make_prob(transcription='gauss-lobatto', n_segs=2, order=5, compressed=False)
+        defect_comp = p.model.defect_comp
 
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['solver']), set([1, 2, 4, 5]))
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['indep']), set([0, 3]))
@@ -66,21 +59,8 @@ class TestCollocationBalanceIndex(unittest.TestCase):
 
     def test_3_lgr(self): 
 
-        transcription = 'radau-ps'
-        p = Problem(model=Group())
-
-        gd = GridData(num_segments=3, segment_ends=np.array([0., 2., 4., 6]),
-                      transcription=transcription, transcription_order=3, compressed=False)
-
-        state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
-                         'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':False, 'fix_final':True}}
-
-        defect_comp = p.model.add_subsystem('defect_comp',
-                                            subsys=CollocationBalanceComp(grid_data=gd,
-                                                                          state_options=state_options))
-
-        p.setup()
-        p.final_setup()
+        p = self.make_prob(transcription='radau-ps', n_segs=3, order=3, compressed=False)
+        defect_comp = p.model.defect_comp
 
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['solver']), set([1,2,3,5,6,7,9,10,11]))
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['indep']), set([0, 4, 8]))
@@ -91,21 +71,8 @@ class TestCollocationBalanceIndex(unittest.TestCase):
 
     def test_5_lgr(self): 
 
-        transcription = 'radau-ps'
-        p = Problem(model=Group())
-
-        gd = GridData(num_segments=2, segment_ends=np.array([0., 2., 4.]),
-                      transcription=transcription, transcription_order=5, compressed=False)
-
-        state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
-                         'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':False, 'fix_final':True}}
-
-        defect_comp = p.model.add_subsystem('defect_comp',
-                                            subsys=CollocationBalanceComp(grid_data=gd,
-                                                                          state_options=state_options))
-
-        p.setup()
-        p.final_setup()
+        p = self.make_prob(transcription='radau-ps', n_segs=2, order=5, compressed=False)
+        defect_comp = p.model.defect_comp
 
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['solver']), set([1,2,3,4,5,7,8,9,10,11]))
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['indep']), set([0, 6]))
@@ -115,21 +82,8 @@ class TestCollocationBalanceIndex(unittest.TestCase):
 
     def test_5_lgr_compressed(self): 
 
-        transcription = 'radau-ps'
-        p = Problem(model=Group())
-
-        gd = GridData(num_segments=2, segment_ends=np.array([0., 2., 4.]),
-                      transcription=transcription, transcription_order=5, compressed=True)
-
-        state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
-                         'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':False, 'fix_final':True}}
-
-        defect_comp = p.model.add_subsystem('defect_comp',
-                                            subsys=CollocationBalanceComp(grid_data=gd,
-                                                                          state_options=state_options))
-
-        p.setup()
-        p.final_setup()
+        p = self.make_prob(transcription='radau-ps', n_segs=2, order=5, compressed=True)
+        defect_comp = p.model.defect_comp
 
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['solver']), set([1,2,3,4,5,6,7,8,9,10]))
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['indep']), set([0,]))
@@ -140,21 +94,8 @@ class TestCollocationBalanceIndex(unittest.TestCase):
 
     def test_5_lgl_compressed(self): 
 
-        transcription = 'gauss-lobatto'
-        p = Problem(model=Group())
-
-        gd = GridData(num_segments=2, segment_ends=np.array([0., 2., 4.]),
-                      transcription=transcription, transcription_order=5, compressed=True)
-
-        state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
-                         'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':False, 'fix_final':True}}
-
-        defect_comp = p.model.add_subsystem('defect_comp',
-                                            subsys=CollocationBalanceComp(grid_data=gd,
-                                                                          state_options=state_options))
-
-        p.setup()
-        p.final_setup()
+        p = self.make_prob(transcription='gauss-lobatto', n_segs=2, order=5, compressed=True)
+        defect_comp = p.model.defect_comp
 
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['solver']), set([1,2,3,4]))
         self.assertSetEqual(set(defect_comp.state_idx_map['x']['indep']), set([0,]))
@@ -162,7 +103,7 @@ class TestCollocationBalanceIndex(unittest.TestCase):
         self.assertSetEqual(set(defect_comp.state_idx_map['v']['solver']), set([0,1,2,3]))
         self.assertSetEqual(set(defect_comp.state_idx_map['v']['indep']), set([4,]))
 
-class TestCollocationComp(unittest.TestCase):
+class TestCollocationBalanceApplyNL(unittest.TestCase):
 
     def setUp(self):
         transcription = 'gauss-lobatto'
@@ -181,7 +122,7 @@ class TestCollocationComp(unittest.TestCase):
 
         indep_comp.add_output(
             'dt_dstau',
-            val=np.zeros((gd.subset_num_nodes['col']))
+            val=np.ones((gd.subset_num_nodes['col']))
         )
 
         indep_comp.add_output(
