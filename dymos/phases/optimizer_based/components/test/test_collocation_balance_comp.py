@@ -106,38 +106,43 @@ class TestCollocationBalanceIndex(unittest.TestCase):
 class TestCollocationBalanceApplyNL(unittest.TestCase):
 
     def setUp(self):
+        
+
         transcription = 'gauss-lobatto'
 
         gd = GridData(
-            num_segments=4, segment_ends=np.array([0., 2., 4., 5., 12.]),
+            num_segments=3, segment_ends=np.array([0., 2., 6., 12.]),
             transcription=transcription, transcription_order=3)
 
-        self.p = Problem(model=Group())
 
         state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
                          'v': {'units': 'm/s', 'shape': (3, 2), 'fix_initial':True, 'fix_final':False}}
+
+
+        num_col_nodes = gd.subset_num_nodes['col']
+        self.p = Problem(model=Group())
 
         indep_comp = IndepVarComp()
         self.p.model.add_subsystem('indep', indep_comp, promotes_outputs=['*'])
 
         indep_comp.add_output(
             'dt_dstau',
-            val=np.ones((gd.subset_num_nodes['col']))
+            val=[1,2,3]
         )
 
         indep_comp.add_output(
             'f_approx:x',
-            val=np.zeros((gd.subset_num_nodes['col'], 1)), units='m')
+            val=np.ones((num_col_nodes,1)), units='m')
         indep_comp.add_output(
             'f_computed:x',
-            val=np.zeros((gd.subset_num_nodes['col'], 1)), units='m')
+            val=np.ones((num_col_nodes, 1))*2, units='m')
 
         indep_comp.add_output(
             'f_approx:v',
-            val=np.zeros((gd.subset_num_nodes['col'], 3, 2)), units='m/s')
+            val=np.ones((num_col_nodes, 3, 2)), units='m/s')
         indep_comp.add_output(
             'f_computed:v',
-            val=np.zeros((gd.subset_num_nodes['col'], 3, 2)), units='m/s')
+            val=np.ones((num_col_nodes, 3, 2))*2, units='m/s')
 
         self.p.model.add_subsystem('defect_comp',
                                    subsys=CollocationBalanceComp(grid_data=gd,
@@ -151,27 +156,19 @@ class TestCollocationBalanceApplyNL(unittest.TestCase):
 
         self.p.setup(force_alloc_complex=True)
 
-        self.p['dt_dstau'] = np.random.random(gd.subset_num_nodes['col'])
-
-        self.p['f_approx:x'] = np.random.random((gd.subset_num_nodes['col'], 1))
-        self.p['f_approx:v'] = np.random.random((gd.subset_num_nodes['col'], 3, 2))
-
-        self.p['f_computed:x'] = np.random.random((gd.subset_num_nodes['col'], 1))
-        self.p['f_computed:v'] = np.random.random((gd.subset_num_nodes['col'], 3, 2))
-
         self.p.run_model()
         self.p.model.run_apply_nonlinear() # need to make sure residuals are computed
 
-    def test_results(self):
+    def test_apply_nonlinear(self):
         dt_dstau = self.p['dt_dstau']
 
+        expected = np.array([0.,-1.,0.,-2.,0.,-3.])
+
         assert_almost_equal(self.p.model._residuals._views['defect_comp.x'],
-                            dt_dstau[:, np.newaxis] * 
-                            (self.p['f_approx:x']-self.p['f_computed:x']))
+                            expected.reshape(6,1))
 
         assert_almost_equal(self.p.model._residuals._views['defect_comp.v'],
-                            dt_dstau[:, np.newaxis, np.newaxis] *
-                            (self.p['f_approx:v']-self.p['f_computed:v']))
+                            expected[:, np.newaxis, np.newaxis]*np.ones((6,3,2)))
 
        
 

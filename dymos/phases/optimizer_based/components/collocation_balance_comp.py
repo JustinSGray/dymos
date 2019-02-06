@@ -165,9 +165,9 @@ class CollocationBalanceComp(ImplicitComponent):
         """
         state_options = self.options['state_options']
         dt_dstau = inputs['dt_dstau']
-    
+
         for state_name in state_options:
-            print(state_name)
+            # print(state_name)
             
             var_names = self.var_names[state_name]
 
@@ -176,8 +176,8 @@ class CollocationBalanceComp(ImplicitComponent):
 
             # IndepVarComp residuals are always 0 
 
-            solved_idx = self.state_idx_map[state_name]['solver']
-            indep_idx = self.state_idx_map[state_name]['solver']
+            solve_idx = self.state_idx_map[state_name]['solver']
+            indep_idx = self.state_idx_map[state_name]['indep']
 
             residuals[state_name][solve_idx,...] = ((f_approx - f_computed).T * dt_dstau).T
             residuals[state_name][indep_idx,...] = 0
