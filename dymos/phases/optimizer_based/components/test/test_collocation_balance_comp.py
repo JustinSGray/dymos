@@ -105,14 +105,11 @@ class TestCollocationBalanceIndex(unittest.TestCase):
 
 class TestCollocationBalanceApplyNL(unittest.TestCase):
 
-    def setUp(self):
+    def make_prob(self, transcription, n_segs, order, compressed):
         
-
-        transcription = 'gauss-lobatto'
-
         gd = GridData(
-            num_segments=3, segment_ends=np.array([0., 2., 6., 12.]),
-            transcription=transcription, transcription_order=3)
+            num_segments=n_segs, segment_ends=np.arange(n_segs+1),
+            transcription=transcription, transcription_order=order)
 
 
         state_options = {'x': {'units': 'm', 'shape': (1,), 'fix_initial':True, 'fix_final':False},
@@ -120,14 +117,14 @@ class TestCollocationBalanceApplyNL(unittest.TestCase):
 
 
         num_col_nodes = gd.subset_num_nodes['col']
-        self.p = Problem(model=Group())
+        p = Problem(model=Group())
 
         indep_comp = IndepVarComp()
-        self.p.model.add_subsystem('indep', indep_comp, promotes_outputs=['*'])
+        p.model.add_subsystem('indep', indep_comp, promotes_outputs=['*'])
 
         indep_comp.add_output(
             'dt_dstau',
-            val=[1,2,3]
+            val=np.arange(n_segs)+1
         )
 
         indep_comp.add_output(
@@ -144,37 +141,46 @@ class TestCollocationBalanceApplyNL(unittest.TestCase):
             'f_computed:v',
             val=np.ones((num_col_nodes, 3, 2))*2, units='m/s')
 
-        self.p.model.add_subsystem('defect_comp',
-                                   subsys=CollocationBalanceComp(grid_data=gd,
-                                                                 state_options=state_options))
+        p.model.add_subsystem('defect_comp',
+                              subsys=CollocationBalanceComp(grid_data=gd,
+                                                            state_options=state_options))
 
-        self.p.model.connect('f_approx:x', 'defect_comp.f_approx:x')
-        self.p.model.connect('f_approx:v', 'defect_comp.f_approx:v')
-        self.p.model.connect('f_computed:x', 'defect_comp.f_computed:x')
-        self.p.model.connect('f_computed:v', 'defect_comp.f_computed:v')
-        self.p.model.connect('dt_dstau', 'defect_comp.dt_dstau')
+        p.model.connect('f_approx:x', 'defect_comp.f_approx:x')
+        p.model.connect('f_approx:v', 'defect_comp.f_approx:v')
+        p.model.connect('f_computed:x', 'defect_comp.f_computed:x')
+        p.model.connect('f_computed:v', 'defect_comp.f_computed:v')
+        p.model.connect('dt_dstau', 'defect_comp.dt_dstau')
 
-        self.p.setup(force_alloc_complex=True)
+        p.setup(force_alloc_complex=True)
 
-        self.p.run_model()
-        self.p.model.run_apply_nonlinear() # need to make sure residuals are computed
+        return p
 
+       
     def test_apply_nonlinear(self):
-        dt_dstau = self.p['dt_dstau']
+
+        p = self.make_prob('gauss-lobatto', n_segs=3, order=3, compressed=False)
+
+        p.run_model()
+        p.model.run_apply_nonlinear() # need to make sure residuals are computed
+
+
+        dt_dstau = p['dt_dstau']
 
         expected = np.array([0.,-1.,0.,-2.,0.,-3.])
 
-        assert_almost_equal(self.p.model._residuals._views['defect_comp.x'],
+        assert_almost_equal(p.model._residuals._views['defect_comp.x'],
                             expected.reshape(6,1))
 
-        assert_almost_equal(self.p.model._residuals._views['defect_comp.v'],
+        assert_almost_equal(p.model._residuals._views['defect_comp.v'],
                             expected[:, np.newaxis, np.newaxis]*np.ones((6,3,2)))
 
        
 
     def test_partials(self):
         np.set_printoptions(linewidth=1024)
-        cpd = self.p.check_partials(compact_print=False, method='fd')
+
+        p = self.make_prob('gauss-lobatto', n_segs=3, order=3, compressed=False)
+        cpd = p.check_partials(compact_print=False, method='fd')
         data = cpd['defect_comp']
 
         # assert_check_partials(cpd) # can't use this here, cause of indepvarcomp weirdness
