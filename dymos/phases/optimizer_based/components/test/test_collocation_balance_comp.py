@@ -175,10 +175,16 @@ class TestCollocationBalanceApplyNL(unittest.TestCase):
     def test_partials(self):
         np.set_printoptions(linewidth=1024)
         cpd = self.p.check_partials(compact_print=False, method='fd')
+        data = cpd['defect_comp']
 
-        
-        # assert_check_partials(cpd)
-
+        # assert_check_partials(cpd) # can't use this here, cause of indepvarcomp weirdness
+        for of,wrt in data: 
+            if of == wrt:  
+                # IndepVarComp like outputs have correct derivs, but FD is wrong so we skip them (should be some form of -I)
+                continue
+            check_data = data[(of,wrt)]
+            self.assertLess(check_data['abs error'].forward, 1e-8)
+            
         # print((self.p['f_approx:v']-self.p['f_computed:v']).ravel())
 
 

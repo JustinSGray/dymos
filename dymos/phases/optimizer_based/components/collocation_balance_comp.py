@@ -185,7 +185,11 @@ class CollocationBalanceComp(ImplicitComponent):
             indep_idx = self.state_idx_map[state_name]['indep']
 
             residuals[state_name][solve_idx,...] = ((f_approx - f_computed).T * dt_dstau).T
-            residuals[state_name][indep_idx,...] = 1 - outputs[state_name][indep_idx]# 0
+            
+            # really is: <idep_val> - \outputs[state_name][indep_idx] but OpenMDAO implementation details mean we just set it to 0
+            # but derivatives are based on <idep_val> - \outputs[state_name][indep_idx], so you get -1 wrt state var
+            # NOTE: Because of this weirdness check_partials will report wrong derivs for the indep vars, but don't believe it!
+            residuals[state_name][indep_idx,...] = 0 
 
     def linearize(self, inputs, outputs, J):
         dt_dstau = inputs['dt_dstau']
@@ -200,8 +204,5 @@ class CollocationBalanceComp(ImplicitComponent):
             J[state_name, var_names['f_approx']] = k
             J[state_name, var_names['f_computed']] = -k
             J[state_name, 'dt_dstau'] = (f_approx - f_computed).ravel()
-
-        pass
-
 
 
