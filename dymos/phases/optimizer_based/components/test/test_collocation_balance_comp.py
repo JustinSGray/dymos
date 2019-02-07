@@ -117,6 +117,8 @@ class TestCollocationBalanceApplyNL(unittest.TestCase):
 
 
         num_col_nodes = gd.subset_num_nodes['col']
+        num_col_nodes_per_seg = gd.subset_num_nodes_per_segment['col']
+
         p = Problem(model=Group())
 
         indep_comp = IndepVarComp()
@@ -124,7 +126,7 @@ class TestCollocationBalanceApplyNL(unittest.TestCase):
 
         indep_comp.add_output(
             'dt_dstau',
-            val=np.arange(n_segs)+1
+            val=np.repeat(np.arange(n_segs)+1, num_col_nodes_per_seg)
         )
 
         indep_comp.add_output(
@@ -177,10 +179,10 @@ class TestCollocationBalanceApplyNL(unittest.TestCase):
        
 
     def test_partials(self):
-        np.set_printoptions(linewidth=1024)
+        np.set_printoptions(linewidth=1024, edgeitems=1e1000)
 
-        p = self.make_prob('gauss-lobatto', n_segs=3, order=3, compressed=False)
-        cpd = p.check_partials(compact_print=False, method='fd')
+        p = self.make_prob('radau-ps', n_segs=2, order=5, compressed=False)
+        cpd = p.check_partials(compact_print=True, method='fd')
         data = cpd['defect_comp']
 
         # assert_check_partials(cpd) # can't use this here, cause of indepvarcomp weirdness

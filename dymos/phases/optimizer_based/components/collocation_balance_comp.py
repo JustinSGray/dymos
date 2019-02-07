@@ -131,14 +131,20 @@ class CollocationBalanceComp(ImplicitComponent):
 
             solve_idx = np.array(self.state_idx_map[state_name]['solver'])
             indep_idx = np.array(self.state_idx_map[state_name]['indep'])
-
-            base_idx = np.tile(np.arange(size),num_col_nodes).reshape(num_col_nodes,size) 
+            num_indep_nodes = indep_idx.shape[0]
+            num_solve_nodes = solve_idx.shape[0]
+            print(solve_idx)
+            print(indep_idx)
+            print('state_name', state_name)
+            base_idx = np.tile(np.arange(size),num_indep_nodes).reshape(num_indep_nodes,size) 
+            print(base_idx)
+            print(indep_idx[:,np.newaxis])
             r = (indep_idx[:,np.newaxis]*size + base_idx).flatten()
             self.declare_partials(of=state_name, wrt=state_name, 
                                  rows=r, cols=r, val=-1)
  
-            c = np.arange(num_col_nodes * size)
-            base_idx = np.tile(np.arange(size),num_col_nodes).reshape(num_col_nodes,size) 
+            c = np.arange(num_solve_nodes * size)
+            base_idx = np.tile(np.arange(size),num_solve_nodes).reshape(num_solve_nodes,size) 
             r = (solve_idx[:,np.newaxis]*size + base_idx).flatten()
 
             var_names = self.var_names[state_name]
@@ -150,7 +156,7 @@ class CollocationBalanceComp(ImplicitComponent):
                                   wrt=var_names['f_computed'],
                                   rows=r, cols=c)
 
-            c = np.repeat(np.arange(num_col_nodes), size)
+            c = np.repeat(np.arange(num_solve_nodes), size)
             self.declare_partials(of=state_name,
                                   wrt='dt_dstau',
                                   rows=r, cols=c)
