@@ -133,12 +133,8 @@ class CollocationBalanceComp(ImplicitComponent):
             indep_idx = np.array(self.state_idx_map[state_name]['indep'])
             num_indep_nodes = indep_idx.shape[0]
             num_solve_nodes = solve_idx.shape[0]
-            print(solve_idx)
-            print(indep_idx)
-            print('state_name', state_name)
+           
             base_idx = np.tile(np.arange(size),num_indep_nodes).reshape(num_indep_nodes,size) 
-            print(base_idx)
-            print(indep_idx[:,np.newaxis])
             r = (indep_idx[:,np.newaxis]*size + base_idx).flatten()
             self.declare_partials(of=state_name, wrt=state_name, 
                                  rows=r, cols=r, val=-1)
