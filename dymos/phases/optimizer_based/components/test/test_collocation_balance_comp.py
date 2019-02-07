@@ -175,9 +175,11 @@ class TestCollocationBalanceApplyNL(unittest.TestCase):
     def test_partials(self):
         np.set_printoptions(linewidth=1024)
         cpd = self.p.check_partials(compact_print=False, method='fd')
+
+        
         # assert_check_partials(cpd)
 
-        print((self.p['f_approx:v']-self.p['f_computed:v']).ravel())
+        # print((self.p['f_approx:v']-self.p['f_computed:v']).ravel())
 
 
 if __name__ == '__main__':

@@ -95,7 +95,6 @@ class CollocationBalanceComp(ImplicitComponent):
             var_names[state_name] = {
                 'f_approx': 'f_approx:{0}'.format(state_name),
                 'f_computed': 'f_computed:{0}'.format(state_name),
-                # 'defect': 'defects:{0}'.format(state_name),
             }
 
         for state_name, options in iteritems(state_options):
@@ -124,26 +123,32 @@ class CollocationBalanceComp(ImplicitComponent):
                 units=rate_units)
 
 
-            # self.declare_partials(of=name, wrt=options['lhs_name'], rows=ar, cols=ar, val=1.0)
-            # self.declare_partials(of=name, wrt=options['rhs_name'], rows=ar, cols=ar, val=1.0)
-
         # Setup partials
 
         for state_name, options in iteritems(state_options):
             shape = options['shape']
             size = np.prod(shape)
 
-            r = np.arange(num_col_nodes * size)
+            solve_idx = np.array(self.state_idx_map[state_name]['solver'])
+            indep_idx = np.array(self.state_idx_map[state_name]['indep'])
+
+            base_idx = np.tile(np.arange(size),num_col_nodes).reshape(num_col_nodes,size) 
+            r = (indep_idx[:,np.newaxis]*size + base_idx).flatten()
+            self.declare_partials(of=state_name, wrt=state_name, 
+                                 rows=r, cols=r, val=-1)
+ 
+            c = np.arange(num_col_nodes * size)
+            base_idx = np.tile(np.arange(size),num_col_nodes).reshape(num_col_nodes,size) 
+            r = (solve_idx[:,np.newaxis]*size + base_idx).flatten()
 
             var_names = self.var_names[state_name]
-
             self.declare_partials(of=state_name,
                                   wrt=var_names['f_approx'],
-                                  rows=r, cols=r)
+                                  rows=r, cols=c)
 
             self.declare_partials(of=state_name,
                                   wrt=var_names['f_computed'],
-                                  rows=r, cols=r)
+                                  rows=r, cols=c)
 
             c = np.repeat(np.arange(num_col_nodes), size)
             self.declare_partials(of=state_name,
@@ -180,9 +185,9 @@ class CollocationBalanceComp(ImplicitComponent):
             indep_idx = self.state_idx_map[state_name]['indep']
 
             residuals[state_name][solve_idx,...] = ((f_approx - f_computed).T * dt_dstau).T
-            residuals[state_name][indep_idx,...] = 0
+            residuals[state_name][indep_idx,...] = 1 - outputs[state_name][indep_idx]# 0
 
-    def linearize(self, inputs, outputs, jacobian):
+    def linearize(self, inputs, outputs, J):
         dt_dstau = inputs['dt_dstau']
         for state_name, options in iteritems(self.options['state_options']):
             size = np.prod(options['shape'])
@@ -192,9 +197,11 @@ class CollocationBalanceComp(ImplicitComponent):
 
             k = np.repeat(dt_dstau, size)
 
-            partials[state_name, var_names['f_approx']] = k
-            partials[state_name, var_names['f_computed']] = -k
-            partials[state_name, 'dt_dstau'] = (f_approx - f_computed).ravel()
+            J[state_name, var_names['f_approx']] = k
+            J[state_name, var_names['f_computed']] = -k
+            J[state_name, 'dt_dstau'] = (f_approx - f_computed).ravel()
+
+        pass
 
 
 
