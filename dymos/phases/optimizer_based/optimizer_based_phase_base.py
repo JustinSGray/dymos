@@ -8,13 +8,12 @@ import numpy as np
 
 from openmdao.api import IndepVarComp
 
-from ..optimizer_based.components import CollocationDefectComp, StateInterpComp, CollocationBalanceComp
+from ..optimizer_based.components import CollocationDefectComp, CollocationBalanceComp, StateInterpComp
 from ..components import EndpointConditionsComp
 from ..phase_base import PhaseBase
 from ...utils.constants import INF_BOUND
 from ...utils.misc import CoerceDesvar, get_rate_units
 from ...utils.lagrange import lagrange_matrices
-from ...utils.simulation import simulate_phase
 from ...utils.indexing import get_src_indices_by_row
 
 
@@ -37,89 +36,6 @@ class OptimizerBasedPhaseBase(PhaseBase):
         A dictionary of the default options for controllable inputs of the Phase RHS
 
     """
-
-    def simulate(self, times='all', integrator='vode', integrator_params=None,
-                 observer=None, record_file=None, record=True):
-        """
-        Integrate the current phase using the current values of time, states, and controls.
-
-        Parameters
-        ----------
-        times : str or sequence
-            The times at which the observing function will be called, and outputs will be saved.
-            If given as a string, it must be a valid node subset name.
-            If given as a sequence, it directly provides the times at which output is provided,
-            *in addition to the segment boundaries*.
-        integrator : str
-            The integrator to be used by scipy.ode.  This is one of:
-            'vode', 'lsoda', 'dopri5', or 'dopri853'.
-        integrator_params : dict
-            Parameters specific to the chosen integrator.  See the scipy.integrate.ode
-            documentation for details.
-        observer : callable, str, or None
-            A callable function to be called at the specified timesteps in
-            `integrate_times`.  This can be used to record the integrated trajectory.
-            If 'progress-bar', a ProgressBarObserver will be used, which outputs the simulation
-            process to the screen as a ProgressBar.
-            If 'stdout', a StdOutObserver will be used, which outputs all variables
-            in the model to standard output by default.
-            If None, no observer will be called.
-        record_file : str or None
-            A string given the name of the recorded file to which the results of the explicit
-            simulation should be saved.  If None, automatically save to '<phase_name>_sim.db'.
-        record : bool
-            If True (default), save the explicit simulation results to the file specified
-            by record_file.
-
-        Returns
-        -------
-        results : PhaseSimulationResults object
-        """
-
-        ode_class = self.options['ode_class']
-        ode_init_kwargs = self.options['ode_init_kwargs']
-        time_values = self.get_values('time').ravel()
-        state_values = {}
-        control_values = {}
-        design_parameter_values = {}
-        input_parameter_values = {}
-        for state_name, options in iteritems(self.state_options):
-            state_values[state_name] = self.get_values(state_name, nodes='all')
-        for control_name, options in iteritems(self.control_options):
-            control_values[control_name] = self.get_values(control_name, nodes='all')
-        for dp_name, options in iteritems(self.design_parameter_options):
-            design_parameter_values[dp_name] = self.get_values(dp_name, nodes='all')
-        for ip_name, options in iteritems(self.input_parameter_options):
-            input_parameter_values[ip_name] = self.get_values(ip_name, nodes='all')
-
-        exp_out = simulate_phase(self.name,
-                                 ode_class=ode_class,
-                                 time_options=self.time_options,
-                                 state_options=self.state_options,
-                                 control_options=self.control_options,
-                                 design_parameter_options=self.design_parameter_options,
-                                 input_parameter_options=self.input_parameter_options,
-                                 time_values=time_values,
-                                 state_values=state_values,
-                                 control_values=control_values,
-                                 design_parameter_values=design_parameter_values,
-                                 input_parameter_values=input_parameter_values,
-                                 ode_init_kwargs=ode_init_kwargs,
-                                 grid_data=self.grid_data,
-                                 times=times,
-                                 record=record,
-                                 record_file=record_file,
-                                 observer=observer,
-                                 integrator=integrator,
-                                 integrator_params=integrator_params)
-
-        return exp_out
-
-    def initialize(self, **kwargs):
-        super(OptimizerBasedPhaseBase, self).initialize(**kwargs)
-
-        self.options.declare('defect_solver', default=False, types=bool)
-
     def setup(self):
         super(OptimizerBasedPhaseBase, self).setup()
 
@@ -133,21 +49,14 @@ class OptimizerBasedPhaseBase(PhaseBase):
         indep_controls = ['indep_controls'] if num_opt_controls > 0 else []
         design_params = ['design_params'] if self.design_parameter_options else []
         input_params = ['input_params'] if self.input_parameter_options else []
+        traj_params = ['traj_params'] if self.traj_parameter_options else []
         control_interp_comp = ['control_interp_comp'] if num_controls > 0 else []
 
+        order = self._time_extents + indep_controls + \
+            input_params + design_params + traj_params + \
+            ['indep_states', 'time'] + control_interp_comp + \
+            ['indep_jumps', 'initial_conditions', 'final_conditions']
 
-        order = self._time_extents + indep_controls + input_params + design_params
-            
-        if self.options['defect_solver']: 
-            order += ['time',] 
-        else: 
-            order += ['indep_states', 'time'] 
-        
-        order += control_interp_comp + ['indep_jumps', 'initial_conditions', 'final_conditions']
-
-        # only need this if we aren't using a solver to converge defects
-        # otherwise, the states are owned by `collocation_constraint` which is a balance comp
-       
         if transcription == 'gauss-lobatto':
             order = order + ['rhs_disc', 'state_interp', 'rhs_col', 'collocation_constraint']
         elif transcription == 'radau-ps':
@@ -163,6 +72,9 @@ class OptimizerBasedPhaseBase(PhaseBase):
             order.append('final_boundary_constraints')
         if getattr(self, 'path_constraints', None) is not None:
             order.append('path_constraints')
+
+        order.append('timeseries')
+
         self.set_order(order)
 
     def _setup_rhs(self):
@@ -200,12 +112,11 @@ class OptimizerBasedPhaseBase(PhaseBase):
         grid_data = self.grid_data
         num_state_input_nodes = grid_data.subset_num_nodes['state_input']
 
-
         indep = IndepVarComp()
         for name, options in iteritems(self.state_options):
             indep.add_output(name='states:{0}'.format(name),
-                                shape=(num_state_input_nodes, np.prod(options['shape'])),
-                                units=options['units'])
+                             shape=(num_state_input_nodes, np.prod(options['shape'])),
+                             units=options['units'])
         self.add_subsystem('indep_states', indep, promotes_outputs=['*'])
 
         for name, options in iteritems(self.state_options):
@@ -238,13 +149,13 @@ class OptimizerBasedPhaseBase(PhaseBase):
                     coerce_desvar_option = CoerceDesvar(num_state_input_nodes, desvar_indices,
                                                         options)
 
-                    # lb = np.zeros_like(desvar_indices, dtype=float)
-                    # lb[:] = -INF_BOUND if coerce_desvar_option('lower') is None else \
-                    #     coerce_desvar_option('lower')
+                    lb = np.zeros_like(desvar_indices, dtype=float)
+                    lb[:] = -INF_BOUND if coerce_desvar_option('lower') is None else \
+                        coerce_desvar_option('lower')
 
-                    # ub = np.zeros_like(desvar_indices, dtype=float)
-                    # ub[:] = INF_BOUND if coerce_desvar_option('upper') is None else \
-                    #     coerce_desvar_option('upper')
+                    ub = np.zeros_like(desvar_indices, dtype=float)
+                    ub[:] = INF_BOUND if coerce_desvar_option('upper') is None else \
+                        coerce_desvar_option('upper')
 
                     if options['initial_bounds'] is not None:
                         lb[0] = options['initial_bounds'][0]
@@ -255,8 +166,8 @@ class OptimizerBasedPhaseBase(PhaseBase):
                         ub[-1] = options['final_bounds'][-1]
 
                     self.add_design_var(name='states:{0}'.format(name),
-                                        lower=options['lower'],
-                                        upper=options['upper'],
+                                        lower=lb,
+                                        upper=ub,
                                         scaler=coerce_desvar_option('scaler'),
                                         adder=coerce_desvar_option('adder'),
                                         ref0=coerce_desvar_option('ref0'),
@@ -272,16 +183,10 @@ class OptimizerBasedPhaseBase(PhaseBase):
 
         time_units = self.time_options['units']
 
-        if self.options['defect_solver']:
-            self.add_subsystem('collocation_constraint', 
-                               CollocationBalanceComp(grid_data=grid_data,
-                                                      state_options=self.state_options,
-                                                      time_units=time_units))
-        else: 
-            self.add_subsystem('collocation_constraint',
-                               CollocationDefectComp(grid_data=grid_data,
-                                                     state_options=self.state_options,
-                                                     time_units=time_units))
+        self.add_subsystem('collocation_constraint',
+                           CollocationDefectComp(grid_data=grid_data,
+                                                 state_options=self.state_options,
+                                                 time_units=time_units))
 
         self.connect('time.dt_dstau', ('collocation_constraint.dt_dstau'),
                      src_indices=grid_data.subset_node_indices['col'])
@@ -309,10 +214,9 @@ class OptimizerBasedPhaseBase(PhaseBase):
                 segment_end_idxs = grid_data.subset_node_indices['segment_ends']
                 src_idxs = get_src_indices_by_row(segment_end_idxs, options['shape'], flat=True)
 
-                if not self.options['compressed']:
-                    self.connect(control_src_name,
-                                 'continuity_comp.controls:{0}'.format(name),
-                                 src_indices=src_idxs, flat_src_indices=True)
+                self.connect(control_src_name,
+                             'continuity_comp.controls:{0}'.format(name),
+                             src_indices=src_idxs, flat_src_indices=True)
 
                 self.connect('control_rates:{0}_rate'.format(name),
                              'continuity_comp.control_rates:{}_rate'.format(name),

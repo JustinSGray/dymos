@@ -1,5 +1,6 @@
 from __future__ import division, print_function, absolute_import
 
+import warnings
 from six import iteritems
 
 import numpy as np
@@ -8,8 +9,10 @@ from openmdao.utils.units import convert_units, valid_units
 
 from ..grid_data import GridData, make_subset_map
 from .optimizer_based_phase_base import OptimizerBasedPhaseBase
-from ..components import GaussLobattoPathConstraintComp, GaussLobattoContinuityComp
+from ..components import GaussLobattoPathConstraintComp, GaussLobattoContinuityComp, \
+    GaussLobattoTimeseriesOutputComp
 from ...utils.misc import get_rate_units
+from ...utils.indexing import get_src_indices_by_row
 
 
 class GaussLobattoPhase(OptimizerBasedPhaseBase):
@@ -211,12 +214,14 @@ class GaussLobattoPhase(OptimizerBasedPhaseBase):
                 options['linear'] = True
                 self.connect(src_name='time',
                              tgt_name='path_constraints.all_values:{0}'.format(con_name))
+
             elif var_type == 'time_phase':
                 options['shape'] = (1,)
                 options['units'] = time_units if con_units is None else con_units
                 options['linear'] = True
                 self.connect(src_name='time_phase',
                              tgt_name='path_constraints.all_values:{0}'.format(con_name))
+
             elif var_type == 'state':
                 state_shape = self.state_options[var]['shape']
                 state_units = self.state_options[var]['units']
@@ -274,6 +279,141 @@ class GaussLobattoPhase(OptimizerBasedPhaseBase):
             kwargs = options.copy()
             kwargs.pop('constraint_name', None)
             path_comp._add_path_constraint(con_name, var_type, **kwargs)
+
+    def _setup_timeseries_outputs(self):
+
+        gd = self.grid_data
+        time_units = self.time_options['units']
+        timeseries_comp = GaussLobattoTimeseriesOutputComp(grid_data=gd)
+        self.add_subsystem('timeseries', subsys=timeseries_comp)
+
+        timeseries_comp._add_timeseries_output('time',
+                                               var_class=self._classify_var('time'),
+                                               units=time_units)
+        self.connect(src_name='time', tgt_name='timeseries.all_values:time')
+
+        timeseries_comp._add_timeseries_output('time_phase',
+                                               var_class=self._classify_var('time_phase'),
+                                               units=time_units)
+        self.connect(src_name='time_phase', tgt_name='timeseries.all_values:time_phase')
+
+        for name, options in iteritems(self.state_options):
+            timeseries_comp._add_timeseries_output('states:{0}'.format(name),
+                                                   var_class=self._classify_var(name),
+                                                   shape=options['shape'],
+                                                   units=options['units'])
+            src_rows = gd.input_maps['state_input_to_disc']
+            src_idxs = get_src_indices_by_row(src_rows, options['shape'])
+            self.connect(src_name='states:{0}'.format(name),
+                         tgt_name='timeseries.disc_values:states:{0}'.format(name),
+                         src_indices=src_idxs, flat_src_indices=True)
+            self.connect(src_name='state_interp.state_col:{0}'.format(name),
+                         tgt_name='timeseries.col_values:states:{0}'.format(name))
+
+        for name, options in iteritems(self.control_options):
+            control_units = options['units']
+
+            # Control values
+            timeseries_comp._add_timeseries_output('controls:{0}'.format(name),
+                                                   var_class=self._classify_var(name),
+                                                   shape=options['shape'],
+                                                   units=control_units)
+            self.connect(src_name='control_interp_comp.control_values:{0}'.format(name),
+                         tgt_name='timeseries.all_values:controls:{0}'.format(name))
+
+            # # Control rates
+            timeseries_comp._add_timeseries_output('control_rates:{0}_rate'.format(name),
+                                                   var_class=self._classify_var(name),
+                                                   shape=options['shape'],
+                                                   units=get_rate_units(control_units,
+                                                                        time_units,
+                                                                        deriv=1))
+            self.connect(src_name='control_rates:{0}_rate'.format(name),
+                         tgt_name='timeseries.all_values:control_rates:{0}_rate'.format(name))
+
+            # Control second derivatives
+            timeseries_comp._add_timeseries_output('control_rates:{0}_rate2'.format(name),
+                                                   var_class=self._classify_var(name),
+                                                   shape=options['shape'],
+                                                   units=get_rate_units(control_units,
+                                                                        time_units,
+                                                                        deriv=2))
+            self.connect(src_name='control_rates:{0}_rate2'.format(name),
+                         tgt_name='timeseries.all_values:control_rates:{0}_rate2'.format(name))
+
+        for name, options in iteritems(self.design_parameter_options):
+            units = options['units']
+            timeseries_comp._add_timeseries_output('design_parameters:{0}'.format(name),
+                                                   var_class=self._classify_var(name),
+                                                   shape=options['shape'],
+                                                   units=units)
+
+            if self.ode_options._parameters[name]['dynamic']:
+                src_idxs_raw = np.zeros(self.grid_data.subset_num_nodes['all'], dtype=int)
+                src_idxs = get_src_indices_by_row(src_idxs_raw, options['shape'])
+            else:
+                src_idxs_raw = np.zeros(1, dtype=int)
+                src_idxs = get_src_indices_by_row(src_idxs_raw, options['shape'])
+
+            self.connect(src_name='design_parameters:{0}'.format(name),
+                         tgt_name='timeseries.all_values:design_parameters:{0}'.format(name),
+                         src_indices=src_idxs, flat_src_indices=True)
+
+        for name, options in iteritems(self.input_parameter_options):
+            units = options['units']
+            timeseries_comp._add_timeseries_output('input_parameters:{0}'.format(name),
+                                                   var_class=self._classify_var(name),
+                                                   shape=options['shape'],
+                                                   units=units)
+
+            if self.ode_options._parameters[name]['dynamic']:
+                src_idxs_raw = np.zeros(self.grid_data.subset_num_nodes['all'], dtype=int)
+                src_idxs = get_src_indices_by_row(src_idxs_raw, options['shape'])
+            else:
+                src_idxs_raw = np.zeros(1, dtype=int)
+                src_idxs = get_src_indices_by_row(src_idxs_raw, options['shape'])
+
+            self.connect(src_name='input_parameters:{0}_out'.format(name),
+                         tgt_name='timeseries.all_values:input_parameters:{0}'.format(name),
+                         src_indices=src_idxs, flat_src_indices=True)
+
+        for name, options in iteritems(self.traj_parameter_options):
+            units = options['units']
+            target_params = options['target_params']
+            timeseries_comp._add_timeseries_output('traj_parameters:{0}'.format(name),
+                                                   var_class=self._classify_var(name),
+                                                   shape=options['shape'],
+                                                   units=units)
+
+            if self.ode_options._parameters[name]['dynamic']:
+                src_idxs_raw = np.zeros(self.grid_data.subset_num_nodes['all'], dtype=int)
+                src_idxs = get_src_indices_by_row(src_idxs_raw, options['shape'])
+            else:
+                src_idxs_raw = np.zeros(1, dtype=int)
+                src_idxs = get_src_indices_by_row(src_idxs_raw, options['shape'])
+
+            self.connect(src_name='traj_parameters:{0}_out'.format(name),
+                         tgt_name='timeseries.all_values:traj_parameters:{0}'.format(name),
+                         src_indices=src_idxs, flat_src_indices=True)
+
+        for var, options in iteritems(self._timeseries_outputs):
+            output_name = options['output_name']
+
+            # Determine the path to the variable which we will be constraining
+            # This is more complicated for path constraints since, for instance,
+            # a single state variable has two sources which must be connected to
+            # the path component.
+            var_type = self._classify_var(var)
+
+            # Failed to find variable, assume it is in the ODE
+            self.connect(src_name='rhs_disc.{0}'.format(var),
+                         tgt_name='timeseries.disc_values:{0}'.format(output_name))
+            self.connect(src_name='rhs_col.{0}'.format(var),
+                         tgt_name='timeseries.col_values:{0}'.format(output_name))
+
+            kwargs = options.copy()
+            kwargs.pop('output_name', None)
+            timeseries_comp._add_timeseries_output(output_name, var_type, **kwargs)
 
     def _get_rate_source_path(self, state_name, nodes, **kwargs):
         gd = self.grid_data
@@ -483,6 +623,18 @@ class GaussLobattoPhase(OptimizerBasedPhaseBase):
             An array of the values at the requested node subset.  The
             node index is the first dimension of the ndarray.
         """
+        dep_txt = """
+        Method get_values has been deprecated.  To retrieve a values of
+        a variable as a timeseries, access the timeseries outputs of the
+        phase via the standard OpenMDAO get_val method, e.g.:
+
+        prob.get_val('phase.timeseries.time')
+        prob.get_val('phase.timeseries.states:x')
+        prob.get_val('phase.timeseries.controls:theta')
+
+        """
+        warnings.warn(dep_txt, DeprecationWarning)
+
         if nodes is None:
             nodes = 'all'
 
