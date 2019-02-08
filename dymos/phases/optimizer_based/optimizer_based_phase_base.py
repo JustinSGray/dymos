@@ -238,13 +238,13 @@ class OptimizerBasedPhaseBase(PhaseBase):
                     coerce_desvar_option = CoerceDesvar(num_state_input_nodes, desvar_indices,
                                                         options)
 
-                    lb = np.zeros_like(desvar_indices, dtype=float)
-                    lb[:] = -INF_BOUND if coerce_desvar_option('lower') is None else \
-                        coerce_desvar_option('lower')
+                    # lb = np.zeros_like(desvar_indices, dtype=float)
+                    # lb[:] = -INF_BOUND if coerce_desvar_option('lower') is None else \
+                    #     coerce_desvar_option('lower')
 
-                    ub = np.zeros_like(desvar_indices, dtype=float)
-                    ub[:] = INF_BOUND if coerce_desvar_option('upper') is None else \
-                        coerce_desvar_option('upper')
+                    # ub = np.zeros_like(desvar_indices, dtype=float)
+                    # ub[:] = INF_BOUND if coerce_desvar_option('upper') is None else \
+                    #     coerce_desvar_option('upper')
 
                     if options['initial_bounds'] is not None:
                         lb[0] = options['initial_bounds'][0]
@@ -255,8 +255,8 @@ class OptimizerBasedPhaseBase(PhaseBase):
                         ub[-1] = options['final_bounds'][-1]
 
                     self.add_design_var(name='states:{0}'.format(name),
-                                        lower=lb,
-                                        upper=ub,
+                                        lower=options['lower'],
+                                        upper=options['upper'],
                                         scaler=coerce_desvar_option('scaler'),
                                         adder=coerce_desvar_option('adder'),
                                         ref0=coerce_desvar_option('ref0'),
