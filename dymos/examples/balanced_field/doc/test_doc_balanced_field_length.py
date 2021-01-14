@@ -215,7 +215,12 @@ class TestBalancedFieldLengthForDocs(unittest.TestCase):
 
         # p5.add_objective('time', loc='final', ref=100.0)
 
-        p.model.linear_solver = om.DirectSolver()
+        # p.model.linear_solver = om.DirectSolver()
+        p.model.linear_solver = om.ScipyKrylov()
+        p.model.linear_solver.options['maxiter'] = 4
+        # p.model.linear_solver.options['iprint'] = 2
+        p.model.linear_solver.precon = om.DirectSolver()
+
         
         #
         # Link the phases
@@ -300,39 +305,45 @@ class TestBalancedFieldLengthForDocs(unittest.TestCase):
         #
         # Solve for the optimal trajectory
         #
-        dm.run_problem(p, run_driver=True, simulate=True, make_plots=True) #, restart='dymos_simulation.db')
+        # om.n2(p)
+        # exit()
+        # p.run_model()
+        # p.model.traj.phases.climb.list_outputs(print_arrays=True, prom_name=True, units=True)
+        # exit()
+
+        dm.run_problem(p, run_driver=True, simulate=False, make_plots=False) #, restart='dymos_simulation.db')
 
         #
         # Get the explicitly simulated solution and plot the results
         #
         # exp_out = traj.simulate()
 
-        #
+        
         # fig, axes = plt.subplots(3, 1)
-        #
+        
         # for phase_name in ['brake_release_to_v1', 'v1_to_vr', 'rotate', 'rto']: #, 'climb']:
-        #
+        
         #     axes[0].plot(p.get_val(f'traj.{phase_name}.timeseries.time'),
         #                  p.get_val(f'traj.{phase_name}.timeseries.states:r', units='ft'), 'o')
-        #
+        
         #     axes[0].plot(exp_out.get_val(f'traj.{phase_name}.timeseries.time'),
         #                  exp_out.get_val(f'traj.{phase_name}.timeseries.states:r', units='ft'), '-')
-        #
+        
         #     axes[1].plot(p.get_val(f'traj.{phase_name}.timeseries.time'),
         #                  p.get_val(f'traj.{phase_name}.timeseries.states:v', units='kn'), 'o')
-        #
+        
         #     axes[1].plot(exp_out.get_val(f'traj.{phase_name}.timeseries.time'),
         #                  exp_out.get_val(f'traj.{phase_name}.timeseries.states:v', units='kn'), '-')
-        #
+        
         #     try:
         #         axes[2].plot(p.get_val(f'traj.{phase_name}.timeseries.time'),
         #                      p.get_val(f'traj.{phase_name}.timeseries.F_r', units='N'), 'o')
-        #
+        
         #         axes[2].plot(exp_out.get_val(f'traj.{phase_name}.timeseries.time'),
         #                      exp_out.get_val(f'traj.{phase_name}.timeseries.F_r', units='N'), '-')
         #     except KeyError:
         #         pass
-        #
+        
         # plt.show()
 
 

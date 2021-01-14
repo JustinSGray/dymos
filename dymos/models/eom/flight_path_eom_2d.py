@@ -112,6 +112,7 @@ class FlightPathEOM2D(om.ExplicitComponent):
 
         mv = m * v
 
+
         outputs['v_dot'] = (T * calpha - D) / m - g * sgam
 
         outputs['gam_dot'] = (T * salpha + L) / mv - (g / v) * cgam
