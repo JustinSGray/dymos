@@ -49,7 +49,7 @@ class TestBalancedFieldLengthForDocs(unittest.TestCase):
         # We don't know what V1 is a priori, we're going to use this model to determine it.
         #
 
-        p1 = dm.Phase(ode_class=GroundRollODE, transcription=dm.Radau(num_segments=10))
+        p1 = dm.Phase(ode_class=GroundRollODE, transcription=dm.Radau(num_segments=3))
 
         traj.add_phase('brake_release_to_v1', p1)
 
@@ -77,7 +77,7 @@ class TestBalancedFieldLengthForDocs(unittest.TestCase):
         #
 
         p2 = dm.Phase(ode_class=GroundRollODE,
-                         transcription=dm.Radau(num_segments=10))
+                         transcription=dm.Radau(num_segments=3))
 
         traj.add_phase('v1_to_vr', p2)
 
@@ -109,7 +109,7 @@ class TestBalancedFieldLengthForDocs(unittest.TestCase):
         # V1 to Zero speed with no propulsion and braking.
         #
 
-        p3 = dm.Phase(ode_class=GroundRollODE, transcription=dm.Radau(num_segments=10))
+        p3 = dm.Phase(ode_class=GroundRollODE, transcription=dm.Radau(num_segments=3))
 
         traj.add_phase('rto', p3)
 
@@ -142,7 +142,7 @@ class TestBalancedFieldLengthForDocs(unittest.TestCase):
         # v_rotate to runway normal force = 0
         #
 
-        p4 = dm.Phase(ode_class=GroundRollODE, transcription=dm.Radau(num_segments=10))
+        p4 = dm.Phase(ode_class=GroundRollODE, transcription=dm.Radau(num_segments=3))
 
         traj.add_phase('rotate', p4)
 
@@ -216,10 +216,10 @@ class TestBalancedFieldLengthForDocs(unittest.TestCase):
         # p5.add_objective('time', loc='final', ref=100.0)
 
         # p.model.linear_solver = om.DirectSolver()
-        p.model.linear_solver = om.ScipyKrylov()
-        p.model.linear_solver.options['maxiter'] = 4
+        # p.model.linear_solver = om.PETScKrylov()
+        # p.model.linear_solver.options['maxiter'] = 4
         # p.model.linear_solver.options['iprint'] = 2
-        p.model.linear_solver.precon = om.DirectSolver()
+        # p.model.linear_solver.precon = om.DirectSolver()
 
         
         #
@@ -241,6 +241,12 @@ class TestBalancedFieldLengthForDocs(unittest.TestCase):
         # Setup the problem and set the initial guess
         #
         p.setup(check=True)
+
+        p.model.traj.phases.climb.linear_solver = om.LinearRunOnce()
+        p.model.traj.phases.rotate.linear_solver = om.LinearRunOnce()
+        p.model.traj.phases.rto.linear_solver = om.LinearRunOnce()
+        p.model.traj.phases.v1_to_vr.linear_solver = om.LinearRunOnce()
+        p.model.traj.phases.brake_release_to_v1.linear_solver = om.LinearRunOnce()
 
         p.set_val('traj.brake_release_to_v1.t_initial', 0)
         p.set_val('traj.brake_release_to_v1.t_duration', 35)
